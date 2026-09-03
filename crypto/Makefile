@@ -13,7 +13,7 @@ TEST_INC    := -Itests
 RISCV_LIB := $(B)/libriscv_qubic.a
 STOCK_LIB := $(B)/libstock_qubic.a
 TOOLS     := $(B)/gen_fixture $(B)/check_fixture $(B)/derive_keys
-TESTBINS  := $(B)/check_port $(B)/check_k12 $(B)/check_keys $(B)/check_roundtrip $(B)/gen_vectors
+TESTBINS  := $(B)/check_port $(B)/check_k12 $(B)/check_keys $(B)/check_roundtrip $(B)/check_bulk $(B)/gen_vectors
 
 .PHONY: all tests test clean
 all: $(RISCV_LIB) $(STOCK_LIB) $(TOOLS)
@@ -65,5 +65,7 @@ $(B)/check_keys: tests/check_keys.c include/stock_host.h tests/tutil.h $(STOCK_L
 	$(CXX) $@.o $(STOCK_LIB) -o $@
 $(B)/check_roundtrip: tests/check_roundtrip.cpp include/riscv_qubic_crypto.h include/stock_host.h tests/tutil.h src/stock_shim.hpp $(G)/stock_patched.cpp $(STOCK_LIB) $(RISCV_LIB)
 	$(CXX) $(STOCK_FLAGS) $(TEST_INC) $< $(STOCK_LIB) $(RISCV_LIB) -o $@
+$(B)/check_bulk: tests/check_bulk.cpp include/riscv_qubic_crypto.h tests/tutil.h src/stock_shim.hpp $(G)/stock_patched.cpp $(RISCV_LIB)
+	$(CXX) $(STOCK_FLAGS) $(TEST_INC) $< $(RISCV_LIB) -o $@
 $(B)/gen_vectors: tests/gen_vectors.cpp tests/tutil.h src/stock_shim.hpp $(G)/stock_patched.cpp
 	$(CXX) $(STOCK_FLAGS) $(TEST_INC) $< -o $@

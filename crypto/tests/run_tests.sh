@@ -23,6 +23,7 @@ run "$BUILD/check_port"      "$VEC/schnorrq_vectors.txt"
 run "$BUILD/check_k12"       "$VEC/k12_vectors.txt"
 run "$BUILD/check_keys"      "$VEC/keygen_vectors.txt"
 run "$BUILD/check_roundtrip" "$VEC/sign_vectors.txt"
+run "$BUILD/check_bulk"
 
 # derive_keys output must match the committed seeds/*.txt files.
 if [ -f "$CRYPTO/seeds/computor_pubkeys.txt" ]; then
@@ -50,7 +51,7 @@ else echo "FAILED: bad fixture not rejected"; fail=1; fi
 
 # Optional cross-check against qubic-cli (identity only; cli prints no hex).
 CLI=${QUBIC_CLI:-qubic-cli}   # optional cross-check, skipped if not in PATH
-if [ -x "$CLI" ]; then
+if CLIPATH=$(command -v "$CLI" 2>/dev/null) && [ -f "$CLIPATH" ]; then
   echo "== qubic-cli cross-check" | tee -a "$LOG"
   for seed in "$(head -n1 "$CRYPTO/seeds/computor_seeds.txt")" "$(head -n1 "$CRYPTO/seeds/arbitrator_seed.txt")"; do
     ours=$(printf '%s\n' "$seed" | "$BUILD/derive_keys" /dev/stdin | awk '{print $3}')
