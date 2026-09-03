@@ -18,6 +18,7 @@ intrinsics). The host functions stay: `tools/gen_fixture.c` signs demo transacti
 ```
 make all     # build/libriscv_qubic.a, build/libstock_qubic.a, gen_fixture, check_fixture, derive_keys
 make tests   # check_port, check_k12, check_keys, check_roundtrip, check_bulk (bulk random stock-vs-port differential), gen_vectors
+`tests/check_upstream.sh` diffs `stock_qubic.c` against qubic/core main (needs network; not part of `make test`).
 make test    # runs tests/run_tests.sh (expects RESULT: ALL PASS)
 make clean
 ```
