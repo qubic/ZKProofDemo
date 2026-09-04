@@ -1,191 +1,114 @@
 # ZKProofDemo
-Demonstrate on how to generate a zk proof to transmit a authorized message from Computors to outside of qubic ecosystem
 
-On this demo, we prove on Ethereum that **a quorum of Qubic computors (≥ 451 of 676) signed the message "Hello ZK, this is QUBIC."** — with one
-Groth16 proof (~300 bytes, ~295k gas, about ~$1) instead of 451 FourQ signature checks on-chain, which is nearly impossible.
+Prove on Ethereum that **≥ 451 of Qubic's 676 computors committed to one oracle reply**, with one
+RISC Zero Groth16 proof (~300 B, ~300k gas) instead of 451 FourQ signature checks on-chain.
 
 ```
 Qubic side                          this repo                                   Ethereum
 ──────────                          ─────────                                   ────────
 arbitrator-signed computor list ─┐  guest program (RISC Zero zkVM)              QubicQuorumVerifier
-+ ≥451 computor signatures ──────┼─▶ checks every signature in C,  ──▶ STARK ──▶ Groth16 ──▶ attest(journal, seal)
-+ the message                    ┘  commits journal = epoch | digest              (GPU farm)     → isAttested(digest, epoch)
++ query tx, ≥451 commit txs,     ┼─▶ re-verifies every tx in C,   ──▶ STARK ──▶ Groth16 ──▶ attest(journal, seal)
++ reveal tx (the reply)          ┘  journal = epoch | queryId | K12(reply)        (GPU farm)     → isAttested(digest, epoch)
 ```
 
-The zkVM program's hash (`IMAGE_ID`) is the only thing the contract trusts. The arbitrator's public
-key is baked into that program, so the proof is bound to the real Qubic computor set. No trusted
-setup of our own: RISC Zero's universal Groth16 circuit + its on-chain `RiscZeroVerifierRouter`.
+## How the demo works
 
----
+1. 676 devnet computor seeds + arbitrator seed `z`×55 live in `crypto/seeds/` (public test keys).
+2. `gen_fixture` (C) builds the Qubic oracle round: query tx, 500 commit txs, reveal tx, signed computor list.
+3. The zkVM guest checks the arbitrator signature over the list; epoch ≠ 0; no duplicate pubkey.
+4. It checks the query and reveal transactions and derives `D = K12(reply)`.
+5. It counts commit txs: valid signature, distinct list member, item `{queryId, D, K12(reply‖index)}`.
+6. Fewer than 451 valid commits ⇒ `panic!` ⇒ no proof can exist (`fixtures/quorum_fail.bin`).
+7. Otherwise it commits a 44-byte journal: `epoch u32 | queryId u64 | D`.
+8. A bento GPU farm proves the run and wraps it into a Groth16 seal (~5 min, 4 GPUs).
+9. `attest(journal, seal)`: the RISC Zero router verifies the seal under the immutable `IMAGE_ID`.
+10. The contract records `isAttested[D][epoch]` and `attestedQueryId`; consumers recompute `K12(reply)`.
+11. The arbitrator pubkey is baked into `IMAGE_ID`: a different guest or key cannot produce a valid seal.
 
-## 1. Code structure
+## Documents
 
-Four real components + support. Data flows crypto → guest → host → contract.
+| Read | To learn |
+|---|---|
+| [`SPEC.md`](SPEC.md) | Normative byte layouts: computor packet, transactions, fixture `ZKQFIX02`, journal, guest statement, contract ABI. |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Data flow diagram from seeds to `attest`, wire-format table, trust model (what is and is not proved). |
+| [`SECURITY.md`](SECURITY.md) | Exact security claim, consumer obligations, trust roots, operational rules, vulnerability reporting. |
+| [`docs/GROTH16_NO_CEREMONY.md`](docs/GROTH16_NO_CEREMONY.md) | Why no trusted setup is needed: RISC Zero's universal wrapper, `IMAGE_ID` as program identity. |
+| [`docs/RUST_TO_C.md`](docs/RUST_TO_C.md) | How the C crypto is linked into the rv32im guest, the two load-bearing gcc flags, bigint2 acceleration. |
+| [`crypto/README.md`](crypto/README.md) | The C library: reference vs portable port, Makefile targets, differential tests, licenses. |
+| [`methods/README.md`](methods/README.md) | The guest program: statement, input frames, build script. |
+| [`host/README.md`](host/README.md) | Host tools: `zkq-prove`, `run_fixture`, `image_id`; `proof.json` format; Rust tests. |
+| [`fixtures/README.md`](fixtures/README.md) | The committed demo inputs and the real Groth16 receipt; how to regenerate them. |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | `config/deploy.env` keys, deploy/verify runbook, mainnet checklist. |
+| [`docs/BENTO.md`](docs/BENTO.md) | Running the GPU proving farm: build, server, workers, sizing, version lock, troubleshooting. |
+| [`docker/README.md`](docker/README.md) | Pinned dev image and the containerised farm variant. |
+| [`docs/E2E_REPORT.md`](docs/E2E_REPORT.md) | Evidence: real proof, Sepolia transactions, tamper checks, gates, history of IMAGE_IDs. |
 
-| Folder | Language | What it is | Why it exists |
-|---|---|---|---|
-| **`crypto/`** | C (+ C++ host shim) | FourQ **SchnorrQ verify** and **KangarooTwelve** (Qubic's hash), portable rv32im port `src/fourq_verify.c` + `tables.c`; `src/stock.c` = untouched Qubic-core reference used only as test oracle; `tools/derive_keys` (seed → pubkey/identity); `tests/` (vectors: 701 K12, 16 SchnorrQ, 677 keygen, 34 sign) | The zkVM is 32-bit RISC-V; Qubic's crypto had to be ported bit-exactly. Differentially tested against `stock.c` (0 diffs over ~90k adversarial cases). |
-| **`methods/`** | Rust + the C above | The **guest** = the program being proven (`guest/src/main.rs`): read packet + query tx + reply + commit txs + reveal tx, verify the arbitrator signature, count ≥ 451 distinct valid commits, commit the 44-byte journal. `guest/src/bigint2.rs` moves field arithmetic onto risc0's `bigint2` precompile (597 M → 215 M cycles). `guest/build.rs` compiles `crypto/` into it and bakes the arbitrator from `config/deploy.env`. `src/lib.rs` exports `ZKQ_QUORUM_ELF` / `ZKQ_QUORUM_ID` (= IMAGE_ID). | Everything here changes IMAGE_ID. |
-| **`host/`** | Rust | Native tools: `zkq-prove` (prove via a bento GPU farm; `verify` a receipt), `run_fixture` (execute the guest without proving), `image_id`, `zkq_identity`. `src/fixture.rs` = the `ZKQFIX02` input format. Test inputs come from `crypto/build/gen_fixture` (C). | Relayer/operator tooling; outputs `journal_hex` + `seal_hex` for the contract. |
-| **`contracts/`** | Solidity | `QubicQuorumVerifier.sol` (single file, no framework): `attest(journal, seal)` → router verifies under the immutable `IMAGE_ID` → `isAttested[digest][epoch] = true`, `attestedQueryId[digest][epoch] = queryId`. | The on-chain consumer entry point. |
-| `config/deploy.env` | — | **The one config**: profile, arbitrator identity, chain/router/verifier, signer, prover farm. Read by both build scripts and every shell script. | One place = no mismatch between guest, scripts and chain. |
-| `scripts/` | bash | `build.sh` (locked build + fixtures), `check_config.sh`, `deploy_verifier.sh` (`forge create`), `demo_quorum_ok.sh`, `demo_quorum_fail.sh`, `e2e.sh`, `lib/config.sh`, `bento/` (GPU farm: server / workers / status / stop / cancel) | Operator entry points. |
-| `crypto/seeds/` | text | 676 devnet computor seeds (public `core-lite` defaults) + arbitrator seed `z`×55 + derived pubkeys | Only so `gen_fixture` can sign test inputs. Never for production. |
-| `fixtures/` | generated | `quorum_ok.bin`, `quorum_fail.bin`, receipts (`*.json`) — gitignored, see `fixtures/README.md` | Test inputs / evidence. |
-| `docker/` | — | Pinned dev image (gcc, Rust, rzup, Foundry) + compose variant of the prover farm (untested) | Reproducible toolchain. |
-| `docs/` | — | `DEPLOY.md` (runbook), `BENTO.md` (farm), `ARCHITECTURE.md`, `RUST_TO_C.md`, `GROTH16_NO_CEREMONY.md`, `E2E_REPORT.md` | |
-| `SPEC.md`, `SECURITY.md`, `NOTICE` | — | Byte formats/constants; what is and is not proved; third-party licenses | |
+## Reproduce from scratch (fresh Ubuntu 24.04)
 
-If you only ever touch three things: `config/deploy.env` (deployment), `methods/guest/src/main.rs`
-(the statement), `contracts/QubicQuorumVerifier.sol` (what the chain does with it).
-
-### What exactly is proved (`SPEC.md`)
-
-Inputs to the guest: `Computors` packet (`epoch u16 | 676 × pubkey 32 B | arbitrator sig 64 B`,
-21 698 B), the oracle query tx, the reply, N `OracleReplyCommit` txs, the reveal tx.
-
-1. The packet's signature verifies under the arbitrator pubkey baked into the guest.
-2. The query tx is signed and `tick == queryId >> 31`; the reveal tx is signed by a list member and
-   carries `queryId | reply`.
-3. ≥ 451 **distinct** members of the list signed a commit tx (type 6) carrying
-   `queryId | K12(reply) | K12(reply ‖ index)` — full Qubic transactions, so nothing can be replayed
-   under another query or list.
-4. Journal (public output, 44 B): `epoch u32 LE | queryId u64 LE | K12(reply)`.
-
-The contract recomputes `sha256(journal)`, asks the RISC Zero router to verify the Groth16 seal
-against the immutable `IMAGE_ID`, then stores `isAttested[digest][epoch] = true`. Consumers call
-`isAttested(digest, epoch)`.
-
----
-
-## 2. The demo, step by step
-
-Everything runs from `config/deploy.env` (ships with devnet defaults: Sepolia, arbitrator = seed
-`z`×55, prover farm on localhost).
-
-**Step 0 — toolchain.** Either the dev image or local: Rust 1.96 (`rust-toolchain.toml`), `rzup`
-with rust 1.94.1 + cpp 2024.1.5 + r0vm 3.0.4, gcc/make, Foundry.
-
+**1. Toolchain.** Either the pinned image or native:
 ```bash
+git clone https://github.com/qubic/ZKProofDemo && cd ZKProofDemo
 docker build -f docker/Dockerfile.dev -t zkq-dev . && docker run --rm -it -v "$PWD:/work" zkq-dev
 ```
-
-**Step 1 — crypto self-test.** Port vs Qubic reference.
 ```bash
-crypto/tests/run_tests.sh          # K12 701/701, SchnorrQ 16/16, keygen 687/687, sign/verify 272/272
+# native: gcc/make/python3, Rust 1.96.1 (rust-toolchain.toml), RISC Zero, Foundry
+sudo apt install -y build-essential python3 git curl pkg-config libssl-dev
+curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.96.1 --component rust-src
+curl -L https://risczero.com/install | bash && rzup install rust 1.94.1 && rzup install cpp 2024.1.5 && rzup install r0vm 3.0.4
+curl -L https://foundry.paradigm.xyz | bash && foundryup -i v1.7.1
 ```
 
-**Step 2 — build (locked) and read the program identity.**
+**2. Crypto self-test.** Portable port vs Qubic reference, native.
 ```bash
-scripts/build.sh
-target/release/image_id            # IMAGE_ID + the arbitrator identity it was built with
+crypto/tests/run_tests.sh            # RESULT: ALL PASS
 ```
 
-**Step 3 — make the inputs.** 676 computors, epoch 999, reply `Hello ZK, this is Qubic!`;
-500 of them send a commit tx (`gen_fixture` signs with the devnet seeds; `scripts/build.sh` already did this):
+**3. Build and generate inputs.**
 ```bash
-G="crypto/build/gen_fixture --seeds crypto/seeds/computor_seeds.txt --arbitrator-seed crypto/seeds/arbitrator_seed.txt --epoch 999 --message 'Hello ZK, this is Qubic!'"
-$G --commits 500 --out fixtures/quorum_ok.bin
-$G --commits 500 --bad-commits 200 --out fixtures/quorum_fail.bin     # 300 good + 200 corrupted signatures
+scripts/build.sh                     # cargo --locked, make crypto/, fixtures/quorum_{ok,fail}.bin, prints IMAGE_ID
+```
+Expected `IMAGE_ID: 0x77948aba14eefc52875e6f06ff4642f07b0b1a1095394e66fbf38294912fd9ac` (risc0 3.0.4).
+
+**4. Execute the guest without proving.**
+```bash
+RISC0_DEV_MODE=1 target/release/run_fixture                       # PASS quorum_ok.bin ... quorum_fail.bin panics
+RISC0_DEV_MODE=1 cargo test --release --locked
+target/release/zkq-prove verify --proof fixtures/quorum_ok.groth16.json   # the committed real receipt
 ```
 
-**Step 4 — run the guest without proving (fast, dev mode).**
+**5. Dev-mode demos** (fake receipts, no chain).
 ```bash
-RISC0_DEV_MODE=1 target/release/run_fixture --fixture fixtures/quorum_ok.bin
-#  PASS quorum_ok.bin: journal e7030000 0000000020a10700 2a40bd68…b827     ← epoch 999 | queryId | K12(reply)
-RISC0_DEV_MODE=1 target/release/run_fixture --fixture fixtures/quorum_fail.bin --expect-fail
-#  Guest panicked: quorum not reached: 300 valid distinct commits, need 451 ← no proof possible
+RISC0_DEV_MODE=1 scripts/demo_quorum_ok.sh
+scripts/demo_quorum_fail.sh          # "quorum not reached: proof impossible"
 ```
 
-**Step 5 — contract.** Validate the config, then deploy (IMAGE_ID is immutable: a new guest ⇒ a new contract):
+**6. Sepolia signer.** Fund a key, then either a Foundry keystore or a file:
 ```bash
-scripts/check_config.sh            # chain id, router, signer, on-chain IMAGE_ID vs built, farm version lock → "== config OK"
-scripts/deploy_verifier.sh         # deploys QubicQuorumVerifier(router, IMAGE_ID); writes VERIFIER= back
+cast wallet import demo --interactive && sed -i 's/^ETH_ACCOUNT=.*/ETH_ACCOUNT=demo/' config/deploy.env
+# or: echo "PRIVATE_KEY=0x..." > .wallet && chmod 600 .wallet
+scripts/check_config.sh              # "== config OK" (bento WARNs are fine until step 8)
 ```
 
-**Step 6 — real proof on GPUs and on-chain attestation.** Needs a bento farm (`docs/BENTO.md`).
+**7. Deploy the verifier.**
+```bash
+scripts/deploy_verifier.sh           # forge create contracts/QubicQuorumVerifier.sol (router, IMAGE_ID); writes VERIFIER=
+```
+
+**8. Proving farm.** One box with NVIDIA GPUs, per [`docs/BENTO.md`](docs/BENTO.md):
+build bento at risc0 3.0.4, set `BENTO_AGENT` / `BENTO_REST_API` / `BONSAI_API_URL` in
+`config/deploy.env`, `scripts/bento/start_server.sh`, `scripts/bento/status.sh` → `VERSION LOCK OK`.
+
+**9. Real proof and on-chain attestation.**
 ```bash
 RISC0_DEV_MODE=0 scripts/demo_quorum_ok.sh
-#  prove …  receipt_kind: groth16, seal_hex 0x73c457ba…                 (~5 min on 4 × RTX 4090)
-#  local verify OK under IMAGE_ID
-#  tx 0x…   isAttested(0x2a40…b827, 999) = true   attestedQueryId = 2147483648000000
-scripts/demo_quorum_fail.sh         # prover rejects the fail fixture: "quorum not reached: proof impossible"
+#  receipt_kind: groth16 ... local verify OK
+#  tx 0x…  isAttested(0x2a40…b827, 999) = true   attestedQueryId = 2147483648000000
+RISC0_DEV_MODE=0 scripts/demo_quorum_fail.sh     # farm rejects it: "quorum not reached"
 ```
 
-`scripts/e2e.sh` runs steps 1–4, `cargo test`, the replay / wrong-digest fixtures, then both demos.
+**10. Everything at once:** `scripts/e2e.sh` (steps 3–5 plus replay / wrong-digest fixtures; attests when `RISC0_DEV_MODE=0`).
 
----
+## License
 
-## 3. From demo to production
-
-The demo already proves Qubic's real oracle flow: every computor's oracle machine sends an
-`OracleReplyCommit` transaction (type 6) whose input carries `queryId | K12(reply) | knowledge proof`,
-and the guest verifies those transactions byte-for-byte as core does:
-
-```
-Transaction (Qubic core network_messages/transactions.h)
-  sourcePublicKey   32 B   ← the computor (must be in the epoch's list)
-  destinationPublicKey 32 B
-  amount            8 B
-  tick              4 B   ← must be after the query tick
-  inputType         2 B   ← 6 = OracleReplyCommit                            = domain separation
-  inputSize         2 B
-  input             n B   ← queryId u64 | replyDigest 32 B | knowledgeProof 32 B
-  signature         64 B  ← SchnorrQ over K12(everything above)
-```
-
-What changes for production: the packet must be the live arbitrator-signed `BroadcastComputors`
-(`ZKQ_ARBITRATOR_IDENTITY` = core's `ARBITRATOR`, new `IMAGE_ID`, new contract), and the fixture is
-built from real network transactions instead of `gen_fixture`.
-
----
-
-## 4. Use case: a Qubic → Ethereum bridge withdrawal
-
-Goal: a user burns 100 wUSDT on Qubic and receives 100 USDT on Ethereum, with no trusted relayer.
-
-1. **Qubic:** the user calls the bridge contract's `Withdraw(amount, ethRecipient)`. The contract
-   burns the tokens and emits a log `Withdrawn(withdrawId, amount, ethRecipient)`.
-2. **Oracle round:** anyone sends an oracle query for that log (`readQubicLog`, interface 4:
-   `tick | txHash | logId`). Every computor's oracle machine reads its own bob node, builds the
-   288-byte reply (the raw log), and broadcasts an `OracleReplyCommit` transaction with
-   `K12(reply)`. ≥ 451 identical commits ⇒ the reply is revealed on Qubic.
-3. **Relayer (permissionless):** collects the epoch's `BroadcastComputors` packet + 451 commit
-   transactions for that `queryId`, writes a `ZKQFIX02` file, runs
-   `zkq-prove --fixture … --mode groth16` on a GPU farm (~5 min), gets `journal` + `seal`.
-4. **Ethereum:** the relayer calls `QubicQuorumVerifier.attest(journal, seal)` (~295k gas).
-   The router verifies the Groth16 proof; the contract records `isAttested[replyDigest][epoch]`.
-5. **Release:** the user (or relayer) calls `Bridge.release(reply bytes, epoch)`. The bridge contract
-   computes `K12(reply)`, checks `verifier.isAttested(digest, epoch)`, decodes the reply
-   (`emitter == Qubic bridge contract`, `logType == Withdrawn`, `withdrawId` unused), and transfers
-   100 USDT to `ethRecipient`.
-
-Why it is safe: releasing needs a valid proof that 451 of the 676 current computors — the same set
-that runs Qubic consensus — committed to that exact log. A single relayer, a single RPC provider,
-or the bridge operator cannot forge it; a wrong or missing quorum simply cannot be proven. Cost to
-the user: one Groth16 verification (~$1 at 1 gwei / $3000 ETH) instead of 451 on-chain signature
-checks (~$300+).
-
-The same pipeline attests anything computors commit to: price feeds (oracle `readEVMLog` of a
-Chainlink `AnswerUpdated` event, attested back to another chain), cross-chain messages, or proofs
-of Qubic state for any EVM consumer.
-
----
-
-## Zero-knowledge proof
-
-The guest (`methods/guest`) re-verifies the whole oracle transaction series inside a RISC Zero
-zkVM: arbitrator-signed computor list, query transaction, 451+ `OracleReplyCommit` transactions
-(each SchnorrQ-signed, carrying `K12(reply)` and a knowledge proof), reveal transaction. Its
-journal is 44 bytes: `epoch u32 | queryId u64 | K12(reply)`. The STARK is wrapped into a ~300-byte
-Groth16 seal by RISC Zero's standard circuit — no trusted setup of our own; the program hash
-(IMAGE_ID) identifies the exact verifier logic.
-
-```bash
-cargo build --release --locked                    # never `cargo update`: risc0 versions are pinned
-target/release/image_id                           # IMAGE_ID + the arbitrator it was built with
-RISC0_DEV_MODE=1 target/release/run_fixture --fixture fixtures/quorum_ok.bin    # execute, no proof
-target/release/zkq-prove verify --proof fixtures/quorum_ok.groth16.json         # check the real receipt
-# real proving needs a GPU farm: RISC0_DEV_MODE=0 BONSAI_API_URL=http://<bento>:8081 BONSAI_API_KEY=x \
-#   target/release/zkq-prove --fixture fixtures/quorum_ok.bin --mode groth16 --out proof.json
-```
+Apache-2.0 for this repository's own code ([`LICENSE`](LICENSE)). Qubic-core derived C is under
+the Anti-Military License, FourQ tables under MIT, K12 parts CC0 — see [`NOTICE`](NOTICE).
