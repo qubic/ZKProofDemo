@@ -1,0 +1,21 @@
+[package]
+name = "host"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "zkq-prove"
+path = "src/main.rs"
+
+[features]
+# GPU proving via RISC Zero's CUDA backend (needs nvcc at build time).
+cuda = ["risc0-zkvm/cuda"]
+
+[dependencies]
+methods = { path = "../methods" }
+risc0-zkvm = { version = "=3.0.4", features = ["prove"] }
+# encode_seal: selector-prefixed seal bytes for RiscZeroVerifierRouter.
+risc0-ethereum-contracts = "3.0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+hex = "0.4"

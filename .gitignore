@@ -1,0 +1,7 @@
+/target
+/crypto/build
+/fixtures/*.proof.json
+.wallet
+*.wallet
+/.env
+/config/*.local*

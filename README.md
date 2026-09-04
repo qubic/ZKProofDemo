@@ -168,3 +168,21 @@ Chainlink `AnswerUpdated` event, attested back to another chain), cross-chain me
 of Qubic state for any EVM consumer.
 
 ---
+
+## Zero-knowledge proof
+
+The guest (`methods/guest`) re-verifies the whole oracle transaction series inside a RISC Zero
+zkVM: arbitrator-signed computor list, query transaction, 451+ `OracleReplyCommit` transactions
+(each SchnorrQ-signed, carrying `K12(reply)` and a knowledge proof), reveal transaction. Its
+journal is 44 bytes: `epoch u32 | queryId u64 | K12(reply)`. The STARK is wrapped into a ~300-byte
+Groth16 seal by RISC Zero's standard circuit — no trusted setup of our own; the program hash
+(IMAGE_ID) identifies the exact verifier logic.
+
+```bash
+cargo build --release --locked                    # never `cargo update`: risc0 versions are pinned
+target/release/image_id                           # IMAGE_ID + the arbitrator it was built with
+RISC0_DEV_MODE=1 target/release/run_fixture --fixture fixtures/quorum_ok.bin    # execute, no proof
+target/release/zkq-prove verify --proof fixtures/quorum_ok.groth16.json         # check the real receipt
+# real proving needs a GPU farm: RISC0_DEV_MODE=0 BONSAI_API_URL=http://<bento>:8081 BONSAI_API_KEY=x \
+#   target/release/zkq-prove --fixture fixtures/quorum_ok.bin --mode groth16 --out proof.json
+```

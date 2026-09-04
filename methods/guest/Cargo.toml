@@ -1,0 +1,18 @@
+[package]
+name = "zkq-quorum"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+risc0-zkvm = { version = "=3.0.4", default-features = false, features = ["std"] }
+risc0-bigint2 = "=1.4.11"
+
+[build-dependencies]
+cc = "1.0"
+
+# Inline the bigint2/platform syscall wrappers into the C-facing shims (cycle count).
+[profile.release]
+lto = true
+codegen-units = 1
