@@ -40,7 +40,6 @@ A Groth16 receipt accepted by `QubicQuorumVerifier` for `imageId = IMAGE_ID` wit
 |---|---|---|
 | Arbitrator key | `config/deploy.env` → `IMAGE_ID` | Demo key is the public seed `z`×55 (`crypto/seeds/`); a real deployment must bake the live arbitrator identity and rotate `IMAGE_ID` when it changes. |
 | RISC Zero verifier | `RiscZeroVerifierRouter` Sepolia `0x925d8331ddc0a1F0d96E68CF073DFE1d92b69187`, mainnet `0x8EaB2D97Dfce405A1692a21b3ff3A172d593D319` | RISC Zero's Groth16 ceremony, the control root of the recursion circuit and the router's governance / emergency-stop (a stopped verifier rejects every seal). Not under this repo's control — `docs/GROTH16_NO_CEREMONY.md`. |
-| Contract owner | `OWNER` in `config/deploy.env` | Controls the image allowlist (propose with rotation delay, revoke immediately). Should be a multisig; a compromised owner can allowlist a malicious `IMAGE_ID`. |
 | C crypto port | `crypto/src/riscv_fourq_verify.c` | Differential-tested against the verbatim core reference `stock_qubic.c` (701 K12, 16 SchnorrQ, 677 keygen, 34 sign/verify vectors + ~30k tamper cases); bigint2 precompile results are host-supplied, so the guest range-checks every result `< p` and panics otherwise (`docs/RUST_TO_C.md`). |
 | `IMAGE_ID` reproducibility | `rzup` rust 1.94.1, cpp 2024.1.5, risc0 3.0.4 crate set (`Cargo.lock`, `--locked`), fixed C flags | `build.rs` refuses foreign `CFLAGS`/`CC`. Same inputs → same `IMAGE_ID`; verify with `target/release/image_id` before trusting an on-chain allowlist entry. |
 
@@ -53,7 +52,7 @@ A Groth16 receipt accepted by `QubicQuorumVerifier` for `imageId = IMAGE_ID` wit
 - Bento ports (8081 REST, 5432 postgres, 6379 redis, 9000 minio) are **unauthenticated**; firewall
   them to the farm LAN. `scripts/lib/config.sh` refuses the default infra credentials when
   `BENTO_INFRA_HOST` is not loopback.
-- Signing key: prefer `ETH_ACCOUNT` (Foundry keystore) over a raw wallet file; keep `OWNER` on a multisig.
+- Signing key: prefer `ETH_ACCOUNT` (Foundry keystore) over a raw wallet file.
 - Attestation is permissionless and unstaked: anyone with a valid proof may submit it.
 - `crypto/seeds/` and `crypto/tests/vectors/keygen_vectors.txt` contain public devnet private keys;
   proofs built from them are meaningless outside a local devnet.

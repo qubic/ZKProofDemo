@@ -15,7 +15,7 @@ ZKProofDemo/
   methods/                   RISC Zero guest (Rust + cc-linked C) + build.rs
   host/                      Rust host: fixture parsing, prove (dev/local/bento), verify
   fixtures/                  generated: quorum_ok.bin, quorum_fail.bin, …
-  contracts/                 Foundry: QubicQuorumVerifier.sol + deploy/attest scripts   (later commit)
+  contracts/                 QubicQuorumVerifier.sol (single file, inlined IRiscZeroVerifier)
   docker/                    Dockerfiles + compose (dev image, bento GPU prover)
   scripts/                   build, config check, deploy, demos, bento farm            (later commit)
   docs/                      ARCHITECTURE, DEPLOY, BENTO, RUST_TO_C, GROTH16_NO_CEREMONY, E2E_REPORT
@@ -85,19 +85,17 @@ rv32im-safe, needs `-fno-strict-aliasing -fsigned-char`) and reference `stock_qu
 
 ## Sepolia
 - RiscZeroVerifierRouter `0x925d8331ddc0a1F0d96E68CF073DFE1d92b69187` (RISC Zero standard, Groth16).
-- `QubicQuorumVerifier` (solidity 0.8.24, no OZ): constructor(router, imageId, owner, rotationDelay);
-  `attest(bytes32 imageId, bytes journal, bytes seal)`: require journal.length==44,
+- `QubicQuorumVerifier` (solidity ^0.8.24, single file, no deps): constructor(router, imageId), both immutable;
+  `attest(bytes journal, bytes seal)`: require journal.length==44,
   decode epoch (bytes 0..4, u32 LE) + queryId (bytes 4..12, u64 LE) + digest (bytes 12..44), revert
-  `ZeroEpoch` / `EpochOutOfRange` (>65535) before any verify, return (no-op) if already attested,
-  revert `ImageNotActive` unless `isImageActive(imageId)`, `router.verify(seal, imageId, sha256(journal))`,
-  store `attestations[digest][epoch] = imageId` and `attestedQueryId[digest][epoch] = queryId`, emit
-  `QuorumAttested(bytes32 indexed digest, uint32 indexed epoch, bytes32 indexed imageId, uint64 queryId)`.
-  Same digest at another epoch is a separate attestation. Views: `isAttested`, `attestedImageId`,
-  `attestedQueryId`, `isImageActive`, `imageActiveFrom`, `rotationDelay`.
-  Rotation (owner): `proposeImageId(id)` → active at `now + rotationDelay`; `revokeImageId(id)` immediate,
-  old attestations keep their imageId. Ownership: two-step `transferOwnership` / `acceptOwnership`, no renounce.
+  `ZeroEpoch` before any verify, return (no-op) if already attested,
+  `router.verify(seal, IMAGE_ID, sha256(journal))`, store `isAttested[digest][epoch] = true` and
+  `attestedQueryId[digest][epoch] = queryId`, emit
+  `QuorumAttested(bytes32 indexed digest, uint32 indexed epoch, uint64 queryId)`.
+  Same digest at another epoch is a separate attestation. Views: `isAttested`, `attestedQueryId`.
+  No owner, no image rotation: a new guest (new IMAGE_ID) means a new deployment.
   Consumers MUST recompute `K12(reply)` from the revealed reply and query `(digest, epoch)`, SHOULD
-  check `attestedQueryId` and `attestedImageId` — the contract attests digests, not meanings.
+  check `attestedQueryId` — the contract attests digests, not meanings.
 - Current deployment: `0xcc187859d82eae77bf82ac8e98c17dd2885b26f2` (`config/deploy.env` `VERIFIER`).
 - Deployer wallet: `WALLET_FILE` from `config/deploy.env` (default `.wallet`, gitignored; never commit).
 
