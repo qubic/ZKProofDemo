@@ -30,18 +30,15 @@ arbitrator-signed computor list ─┐  guest program (RISC Zero zkVM)          
 | Read | To learn |
 |---|---|
 | [`SPEC.md`](SPEC.md) | Normative byte layouts: computor packet, transactions, fixture `ZKQFIX02`, journal, guest statement, contract ABI. |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Data flow diagram from seeds to `attest`, wire-format table, trust model (what is and is not proved). |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Data flow diagram from seeds to `attest`, wire-format table, trust model, why no trusted setup (`IMAGE_ID` is the program identity). |
 | [`SECURITY.md`](SECURITY.md) | Exact security claim, consumer obligations, trust roots, operational rules, vulnerability reporting. |
-| [`docs/GROTH16_NO_CEREMONY.md`](docs/GROTH16_NO_CEREMONY.md) | Why no trusted setup is needed: RISC Zero's universal wrapper, `IMAGE_ID` as program identity. |
-| [`docs/RUST_TO_C.md`](docs/RUST_TO_C.md) | How the C crypto is linked into the rv32im guest, the two load-bearing gcc flags, bigint2 acceleration. |
 | [`crypto/README.md`](crypto/README.md) | The C library: reference vs portable port, Makefile targets, differential tests, licenses. |
-| [`methods/README.md`](methods/README.md) | The guest program: statement, input frames, build script. |
+| [`methods/README.md`](methods/README.md) | The guest program: statement, input frames, how the C is linked and the load-bearing gcc flags. |
 | [`host/README.md`](host/README.md) | Host tools: `zkq-prove`, `run_fixture`, `image_id`; `proof.json` format; Rust tests. |
-| [`fixtures/README.md`](fixtures/README.md) | The committed demo inputs and the real Groth16 receipt; how to regenerate them. |
+| [`fixtures/README.md`](fixtures/README.md) | The committed demo inputs and the real Groth16 receipt (Sepolia evidence); how to regenerate them. |
 | [`docs/DEPLOY.md`](docs/DEPLOY.md) | `config/deploy.env` keys, deploy/verify runbook, mainnet checklist. |
 | [`docs/BENTO.md`](docs/BENTO.md) | Running the GPU proving farm: build, server, workers, sizing, version lock, troubleshooting. |
 | [`docker/README.md`](docker/README.md) | Pinned dev image and the containerised farm variant. |
-| [`docs/E2E_REPORT.md`](docs/E2E_REPORT.md) | Evidence: real proof, Sepolia transactions, tamper checks, gates, history of IMAGE_IDs. |
 
 ## Reproduce from scratch (fresh Ubuntu 24.04)
 

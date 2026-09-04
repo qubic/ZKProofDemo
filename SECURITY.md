@@ -39,8 +39,8 @@ A Groth16 receipt accepted by `QubicQuorumVerifier` for `imageId = IMAGE_ID` wit
 | Root | Where | Notes |
 |---|---|---|
 | Arbitrator key | `config/deploy.env` → `IMAGE_ID` | Demo key is the public seed `z`×55 (`crypto/seeds/`); a real deployment must bake the live arbitrator identity and rotate `IMAGE_ID` when it changes. |
-| RISC Zero verifier | `RiscZeroVerifierRouter` Sepolia `0x925d8331ddc0a1F0d96E68CF073DFE1d92b69187`, mainnet `0x8EaB2D97Dfce405A1692a21b3ff3A172d593D319` | RISC Zero's Groth16 ceremony, the control root of the recursion circuit and the router's governance / emergency-stop (a stopped verifier rejects every seal). Not under this repo's control — `docs/GROTH16_NO_CEREMONY.md`. |
-| C crypto port | `crypto/src/riscv_fourq_verify.c` | Differential-tested against the verbatim core reference `stock_qubic.c` (701 K12, 16 SchnorrQ, 677 keygen, 34 sign/verify vectors + ~30k tamper cases); bigint2 precompile results are host-supplied, so the guest range-checks every result `< p` and panics otherwise (`docs/RUST_TO_C.md`). |
+| RISC Zero verifier | `RiscZeroVerifierRouter` Sepolia `0x925d8331ddc0a1F0d96E68CF073DFE1d92b69187`, mainnet `0x8EaB2D97Dfce405A1692a21b3ff3A172d593D319` | RISC Zero's Groth16 ceremony, the control root of the recursion circuit and the router's governance / emergency-stop (a stopped verifier rejects every seal). Not under this repo's control. |
+| C crypto port | `crypto/src/riscv_fourq_verify.c` | Differential-tested against the verbatim core reference `stock_qubic.c` (701 K12, 16 SchnorrQ, 677 keygen, 34 sign/verify vectors + ~30k tamper cases); bigint2 precompile results are host-supplied, so the guest range-checks every result `< p` and panics otherwise. |
 | `IMAGE_ID` reproducibility | `rzup` rust 1.94.1, cpp 2024.1.5, risc0 3.0.4 crate set (`Cargo.lock`, `--locked`), fixed C flags | `build.rs` refuses foreign `CFLAGS`/`CC`. Same inputs → same `IMAGE_ID`; verify with `target/release/image_id` before trusting an on-chain allowlist entry. |
 
 ## Modes and operations

@@ -44,7 +44,7 @@ RUN curl -sSfL "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x8
 
 # RISC Zero: rzup (sha256-pinned) + guest Rust toolchain + riscv32-unknown-elf-gcc (cpp component) + r0vm.
 # risc0-build 3.0.4 locates the C compiler via rzup's default `cpp` component and sets
-# CC=<cpp>/bin/riscv32-unknown-elf-gcc for guest builds (see docs/RUST_TO_C.md).
+# CC=<cpp>/bin/riscv32-unknown-elf-gcc for guest builds (see methods/README.md).
 RUN --mount=type=secret,id=github_token,required=false \
     { [ -s /run/secrets/github_token ] && export GITHUB_TOKEN="$(cat /run/secrets/github_token)"; true; } \
     && mkdir -p /root/.risc0/bin \

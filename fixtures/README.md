@@ -8,7 +8,7 @@ Committed so the demo works out of the box. Everything is reproducible; commands
 | `quorum_fail.bin` | 300 valid + **200 corrupted-signature** commits | guest panics: `quorum not reached: 300 valid distinct commits, need 451` |
 | `quorum_wrongdigest.bin` | 300 valid + 200 commits to **another digest** | rejected (300/451) |
 | `quorum_replay.bin` | all commits carry **another queryId** | rejected (0/451) |
-| `quorum_ok.groth16.json` | the **real Groth16 receipt** of `quorum_ok.bin` (journal + seal + full risc0 receipt), attested on Sepolia (`docs/E2E_REPORT.md`: verifier `0xcc187859…26f2`, tx `0xe348959e…ffac0`) | `zkq-prove verify --proof …` → OK under IMAGE_ID `0x77948aba…d9ac` |
+| `quorum_ok.groth16.json` | the **real Groth16 receipt** of `quorum_ok.bin` (journal + seal + full risc0 receipt), attested on Sepolia (verifier `0xcc187859…26f2`, previous contract revision; tx `0xe348959ed4bbcb59e463783a6868b6c2c47383d724fe8b3fce5a38784d5ffac0`) | `zkq-prove verify --proof …` → OK under IMAGE_ID `0x77948aba…d9ac` |
 
 ## Regenerate the `.bin` fixtures (deterministic — identical bytes)
 

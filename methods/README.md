@@ -39,7 +39,7 @@ Frames are read with two `read_slice` syscalls each (a serde `Vec<u8>` cost 8 M 
 
 The `cc` crate compiles `../../crypto/src/{riscv_fourq_verify.c,riscv_tables.c}` into the
 guest with `-O3 -fno-strict-aliasing -fsigned-char` — both `-f` flags are load-bearing
-(`../crypto/README.md`, `../docs/RUST_TO_C.md`). risc0-build sets `CC` to rzup's
+(`../crypto/README.md`). risc0-build sets `CC` to rzup's
 `riscv32-unknown-elf-gcc` (`rzup install cpp`), so the C is built by gcc, not clang. The guest
 declares `fourq_verify` and `qubic_k12` by hand; buffers passed to C are 8-byte aligned
 (`#[repr(align(8))]`). `build.rs` also defines `ZKQ_BIGINT2`: field arithmetic calls the

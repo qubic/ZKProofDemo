@@ -18,7 +18,7 @@ ZKProofDemo/
   contracts/                 QubicQuorumVerifier.sol (single file, inlined IRiscZeroVerifier)
   docker/                    Dockerfiles + compose (dev image, bento GPU prover)
   scripts/                   build, config check, deploy, demos, bento farm
-  docs/                      ARCHITECTURE, DEPLOY, BENTO, RUST_TO_C, GROTH16_NO_CEREMONY, E2E_REPORT
+  docs/                      ARCHITECTURE, DEPLOY, BENTO
 ```
 
 ## Constants
@@ -97,7 +97,7 @@ rv32im-safe, needs `-fno-strict-aliasing -fsigned-char`) and reference `stock_qu
   Consumers MUST recompute `K12(reply)` from the revealed reply and query `(digest, epoch)`, SHOULD
   check `attestedQueryId` — the contract attests digests, not meanings.
 - Deployment: `scripts/deploy_verifier.sh` writes the address to `config/deploy.env` `VERIFIER`. The receipt in
-  `fixtures/` was attested on the previous contract revision at `0xcc187859d82eae77bf82ac8e98c17dd2885b26f2` (`docs/E2E_REPORT.md`).
+  `fixtures/` was attested on the previous contract revision at `0xcc187859d82eae77bf82ac8e98c17dd2885b26f2` (`fixtures/README.md`).
 - Deployer wallet: `WALLET_FILE` from `config/deploy.env` (default `.wallet`, gitignored; never commit).
 
 ## Demo (scripts/)

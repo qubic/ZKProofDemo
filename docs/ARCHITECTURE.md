@@ -45,7 +45,7 @@ computor list is authenticated by the arbitrator's signature; that public key co
 ```
 
 Guest cost: ≈ 215 M cycles for `fixtures/quorum_ok.bin` (452 SchnorrQ verifies; field
-multiplications use the bigint2 precompile — `RUST_TO_C.md`). Prove path: `RISC0_DEV_MODE=1`
+multiplications use the bigint2 precompile — `methods/README.md`). Prove path: `RISC0_DEV_MODE=1`
 (no proof) or bento via `BONSAI_API_URL` (`BENTO.md`).
 
 ## Wire formats (`SPEC.md` is normative; all little-endian, packed)
@@ -82,5 +82,5 @@ Not proved: reply meaning; tick inclusion or oracle timeout; that the packet is 
 list of the epoch (the arbitrator could sign several); freshness. See `SECURITY.md`.
 
 Trust roots: arbitrator key (config → `IMAGE_ID`; demo = public seed `z`×55), RISC Zero
-router/verifier and its one-time ceremony (`GROTH16_NO_CEREMONY.md`), the C crypto port
+router/verifier and its one-time universal ceremony, the C crypto port
 (differential-tested against core's reference, `crypto/README.md`).
