@@ -55,5 +55,5 @@ RISC0_DEV_MODE=1 target/release/run_fixture             # execute guest on both 
 cargo test --release --locked                           # incl. host/tests/guest_quorum.rs
 ```
 
+Any change to the guest source, the C sources or the risc0 version changes `ZKQ_QUORUM_ID`;
 a new `QubicQuorumVerifier` must then be deployed with the new `IMAGE_ID` (it is immutable).
-the contract owner must then rotate the image (`proposeImageId`, `docs/DEPLOY.md`).

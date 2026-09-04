@@ -1,0 +1,32 @@
+# Extra GPU box: prove agents only, infra + rest_api on BENTO_INFRA_HOST (the single-box stack).
+#   BENTO_INFRA_HOST=<server-ip> docker compose -f docker/docker-compose.worker.yml up -d
+# Every prove worker needs the groth16 keys: groth16 wrap tasks ride the PROVE stream, so any
+# prove agent may draw one. BENTO_TAG: see docker-compose.yml (must ship risc0-zkvm 3.0.4).
+name: zkq-worker
+
+services:
+  gpu_prove_agent:
+    image: ${AGENT_IMAGE:-ghcr.io/boundless-xyz/boundless/bento-agent:${BENTO_TAG:-PIN_ME}}
+    runtime: ${DOCKER_RUNTIME:-nvidia}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-worker}:${POSTGRES_PASSWORD:-password}@${BENTO_INFRA_HOST:?set BENTO_INFRA_HOST}:5432/${POSTGRES_DB:-taskdb}
+      REDIS_URL: redis://${BENTO_INFRA_HOST}:6379
+      S3_URL: http://${BENTO_INFRA_HOST}:9000
+      S3_BUCKET: ${MINIO_BUCKET:-workflow}
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASS:-password}
+      RUST_LOG: ${RUST_LOG:-info}
+      NO_COLOR: 1
+      RISC0_HOME: /usr/local/risc0        # set if your agent image needs it
+      REDIS_TTL: ${REDIS_TTL:-57600}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - for g in $$(nvidia-smi --query-gpu=index --format=csv,noheader,nounits); do CUDA_VISIBLE_DEVICES=$$g /app/agent -t prove & done; wait
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]

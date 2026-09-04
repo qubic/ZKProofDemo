@@ -1,0 +1,68 @@
+# ZKProofDemo dev/build image: gcc + Rust + RISC Zero toolchain + Foundry.
+# Build (from project root):  docker build -f docker/Dockerfile.dev -t zkq-dev .
+# r0vm must equal the risc0-zkvm pin in Cargo.lock (3.0.4) and the bento agent version (docs/BENTO.md).
+# Every installer is pinned: rustup-init by version + sha256, rzup by sha256 (its download URL is
+# unversioned), foundryup-init by git commit and foundryup by release (attestation-checked by the script).
+FROM ubuntu:24.04
+
+ARG RUST_VERSION=1.96.1
+ARG RUSTUP_VERSION=1.28.2
+ARG RUSTUP_SHA256=20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c
+ARG RISC0_RUST_VERSION=1.94.1
+ARG RISC0_CPP_VERSION=2024.1.5
+ARG R0VM_VERSION=3.0.4
+# rzup 0.5.0 (Linux-X64 build of 2025-08-20). No versioned URL exists; the hash IS the pin —
+# when RISC Zero republishes the binary, the build fails here: verify the new rzup, update both.
+ARG RZUP_VERSION=0.5.0
+ARG RZUP_URL=https://risc0-artifacts.s3.us-west-2.amazonaws.com/rzup/prod/Linux-X64/rzup
+ARG RZUP_SHA256=7cdc1dd5d4b8ef38ea6170c45bd29ba65d389f0e96b365da61631d1fc5c6c1ca
+ARG FOUNDRY_VERSION=v1.7.1
+# foundryup-init.sh at a fixed commit of foundry-rs/foundryup; FOUNDRYUP_VERSION pins the foundryup
+# release it downloads (v0.0.8, sha256 verified by the script against the release attestation).
+ARG FOUNDRYUP_INIT_COMMIT=0188ee7477fb09a8185838ec11eb9ec456f86ccc
+ARG FOUNDRYUP_INIT_SHA256=795a047e89dc04f2b412a55f604ebc669275ac715465537f342e001504a7f198
+ARG FOUNDRYUP_VERSION=0.0.8
+# Optional GitHub token for rzup (rate limits): docker build --secret id=github_token,env=GITHUB_TOKEN
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential gcc g++ python3 git curl ca-certificates \
+        pkg-config libssl-dev xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Runs as root: the bind-mounted repo (/work) is root-owned on the host.
+ENV HOME=/root
+ENV PATH=/root/.cargo/bin:/root/.risc0/bin:/root/.foundry/bin:$PATH
+
+# Rust (host toolchain) via a versioned rustup-init, sha256-checked. rust-toolchain.toml pins the same version.
+RUN curl -sSfL "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu/rustup-init" -o /tmp/rustup-init \
+    && echo "${RUSTUP_SHA256}  /tmp/rustup-init" | sha256sum -c - \
+    && chmod +x /tmp/rustup-init \
+    && /tmp/rustup-init -y --profile minimal --no-modify-path \
+        --default-toolchain ${RUST_VERSION} --component rust-src --component rustfmt \
+    && rm /tmp/rustup-init
+
+# RISC Zero: rzup (sha256-pinned) + guest Rust toolchain + riscv32-unknown-elf-gcc (cpp component) + r0vm.
+# risc0-build 3.0.4 locates the C compiler via rzup's default `cpp` component and sets
+# CC=<cpp>/bin/riscv32-unknown-elf-gcc for guest builds (see docs/RUST_TO_C.md).
+RUN --mount=type=secret,id=github_token,required=false \
+    { [ -s /run/secrets/github_token ] && export GITHUB_TOKEN="$(cat /run/secrets/github_token)"; true; } \
+    && mkdir -p /root/.risc0/bin \
+    && curl -sSfL "${RZUP_URL}" -o /root/.risc0/bin/rzup \
+    && echo "${RZUP_SHA256}  /root/.risc0/bin/rzup" | sha256sum -c - \
+    && chmod +x /root/.risc0/bin/rzup \
+    && rzup --version | grep -qx "rzup ${RZUP_VERSION}" \
+    && rzup install rust ${RISC0_RUST_VERSION} \
+    && rzup install cpp ${RISC0_CPP_VERSION} \
+    && rzup install r0vm ${R0VM_VERSION} \
+    && rm -rf /root/.risc0/tmp
+
+# Foundry (forge/cast/anvil): pinned foundryup-init.sh -> pinned foundryup -> pinned foundry release.
+RUN curl -sSfL "https://raw.githubusercontent.com/foundry-rs/foundryup/${FOUNDRYUP_INIT_COMMIT}/foundryup-init.sh" -o /tmp/foundryup-init.sh \
+    && echo "${FOUNDRYUP_INIT_SHA256}  /tmp/foundryup-init.sh" | sha256sum -c - \
+    && FOUNDRYUP_VERSION=${FOUNDRYUP_VERSION} bash /tmp/foundryup-init.sh \
+    && rm /tmp/foundryup-init.sh \
+    && foundryup -i ${FOUNDRY_VERSION}
+
+WORKDIR /work
+CMD ["bash"]

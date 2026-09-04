@@ -5,3 +5,6 @@
 *.wallet
 /.env
 /config/*.local*
+/methods/guest/target
+/logs
+/docker/bento.env
