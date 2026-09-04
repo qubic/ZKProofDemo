@@ -1,0 +1,44 @@
+ZKProofDemo
+Copyright (c) 2026 the ZKProofDemo authors
+
+This repository's own code (host/, methods/guest Rust, crypto/tools, crypto/tests, Makefile) is
+licensed under the Apache License, Version 2.0 (see LICENSE). It bundles or depends on the
+following third-party components, which keep their own licenses:
+
+1. Qubic core (https://github.com/qubic/core) — Anti-Military License
+   Text: crypto/LICENSE-QUBIC.md
+   - crypto/src/stock_qubic.c          verbatim copy of src/kangaroo_twelve.h + src/four_q.h (host-only test oracle)
+   - crypto/src/riscv_fourq_verify.c   portable rv32im port of the same code (compiled into the zkVM guest)
+   - crypto/src/stock_shim.hpp         reimplementation of core platform helpers (copyMem/setMem, CHAR16, MSVC intrinsics)
+   - crypto/src/stock_host.cpp         glue that includes / links the above
+   Every binary that links crypto/ (the guest ELF, hence the IMAGE_ID; host tools; the C test
+   programs) inherits the Anti-Military License restrictions on use.
+   Upstream note: Qubic core states it also contains MIT code from uint128_t
+   (https://github.com/calccrypto/uint128_t); none of that code is present in this repository.
+
+2. FourQlib (https://github.com/microsoft/FourQlib) — MIT License, Copyright (c) Microsoft Corporation
+   Text: crypto/LICENSE-FourQlib.md
+   - crypto/src/riscv_tables.c         FIXED_BASE_TABLE / DOUBLE_SCALAR_TABLE from FourQ_64bit_and_portable/FourQ_tables.h
+   The FourQ / SchnorrQ arithmetic in stock_qubic.c and riscv_fourq_verify.c also derives from FourQlib
+   (via Qubic core).
+
+3. XKCP — eXtended Keccak Code Package (https://github.com/XKCP/XKCP) — CC0 1.0 / public domain
+   The KangarooTwelve implementation in stock_qubic.c and riscv_fourq_verify.c derives from the Keccak team's
+   reference code (via Qubic core). The Keccak-p[1600] permutation itself is not subject to copyright.
+
+4. RISC Zero crates (https://github.com/risc0/risc0) — Apache License 2.0
+   risc0-zkvm 3.0.4, risc0-build 3.0.4, risc0-zkp, risc0-groth16, risc0-circuit-*, risc0-binfmt,
+   risc0-zkvm-platform, risc0-bigint2 1.4.11 and their transitive risc0-* crates (Cargo.lock).
+   The rzup toolchains (guest Rust, riscv32-unknown-elf-gcc, r0vm, risc0-groth16 keys) are
+   downloaded at image-build time and are not redistributed here.
+
+5. risc0-ethereum (https://github.com/risc0/risc0-ethereum) — Apache License 2.0, Copyright RISC Zero, Inc.
+   - risc0-ethereum-contracts 3.0.1 (Rust crate, Cargo.lock)
+   The on-chain RiscZeroVerifierRouter / Groth16 verifier are RISC Zero deployments, not part of this repo.
+
+
+6. Rust crate dependencies (Cargo.lock) — MIT / Apache-2.0 / BSD-style, per crate; see each crate's
+   license field (`cargo license` or `cargo deny list`). Not redistributed in source form here.
+
+crypto/seeds/ contains public devnet test keys (qubic/core-lite defaults); they carry no license of
+their own and must never be used outside a local devnet.
